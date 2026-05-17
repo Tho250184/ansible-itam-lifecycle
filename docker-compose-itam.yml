@@ -1,0 +1,49 @@
+# 1. Dừng và xóa containers cũ
+docker stop snipe-app snipe-mysql 2>/dev/null
+docker rm snipe-app snipe-mysql 2>/dev/null
+
+# 2. Xóa volumes cũ (để start sạch)
+docker volume rm snipe-db-vol snipe-data 2>/dev/null
+
+# 3. Tạo network
+docker network create snipe-network 2>/dev/null
+
+# 4. Chạy MySQL container
+docker run -d \
+  --name snipe-mysql \
+  --network snipe-network \
+  -e MYSQL_ROOT_PASSWORD=snipeit_root \
+  -e MYSQL_DATABASE=snipeit \
+  -e MYSQL_USER=snipeit_user \
+  -e MYSQL_PASSWORD=snipeit_pass \
+  -v snipe-db-vol:/var/lib/mysql \
+  mysql:8.0
+
+# 5. Đợi MySQL khởi động hoàn toàn
+echo "Đợi MySQL khởi động (30 giây)..."
+sleep 30
+
+# 6. Kiểm tra MySQL đã sẵn sàng
+docker logs snipe-mysql --tail 10
+
+# 7. Chạy Snipe-IT container
+docker run -d \
+  --name snipe-app \
+  --network snipe-network \
+  -e APP_URL=http://localhost:8081 \
+  -e APP_ENV=production \
+  -e APP_DEBUG=true \
+  -e APP_KEY=base64:kVKyXzK9qZLhMJYZ1qKED1WwX4q5gNAIyo5PmJx2iZ8= \
+  -e DB_HOST=snipe-mysql \
+  -e DB_PORT=3306 \
+  -e DB_DATABASE=snipeit \
+  -e DB_USERNAME=snipeit_user \
+  -e DB_PASSWORD=snipeit_pass \
+  -p 8081:80 \
+  -v snipe-data:/var/www/html/storage \
+  snipe/snipe-it:latest
+
+# 8. Xem log để theo dõi
+echo "Theo dõi log Snipe-IT (nhấn Ctrl+C để thoát xem log)..."
+sleep 5
+docker logs -f snipe-app

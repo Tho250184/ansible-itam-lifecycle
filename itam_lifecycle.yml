@@ -1,0 +1,42 @@
+- name: Automated IT Asset Lifecycle Management
+  hosts: workstations
+  gather_facts: true
+  vars:
+    snipeit_url: "http://172.17.176.1:8081/api/v1/hardware"
+    snipeit_token: "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiIxIiwianRpIjoiNjJmNjg2MzJmZGMwMzhjYmQzNTNlZmFmYWNkYTA4ZWJmMmQwYmFjYjg0ZWQ3NTcxYjRhOGJkNGNlMmRkYmRhYzlmYWRhMDY4ODVmNDZhM2EiLCJpYXQiOjE3NzkwMDQwMjEuODQ2MjIyLCJuYmYiOjE3NzkwMDQwMjEuODQ2MjIzLCJleHAiOjI0MTAxNTYwMjEuODI2ODE0LCJzdWIiOiIxIiwic2NvcGVzIjpbXX0.RkCKO40wP8-hnomNczC0oDFfJwh2Wi3fxdzQJGpO5BTj5xboa_YH00dkNdI3z_F0pVyx_1iL8EySgNcbofHmFRwUPrYPQNaZ2z0YBGtrokBvEe34qL3kGgnadFY1BQFml2APb_KVERzFcdNufx-bO8JGKge1Gj4OYN3qdD9Z9jTnzElup-xKbF3D4hr3Ujwc2IqLoSWCBzni_xU3mzdHvNCkZy9zQTa4TAf9VGWJ6NiJ7eayfJjBAN63-xpRBHZos-uYBniAqPZz1szU1WMw-V8-QSScD5UIzaXm54KKiWJdlWrzzw9LHGEbXZq3GfdXAaC6qdlh4LGTrRiyJxoR69cHe3_oYm-ADUb0WiyI0LMY6QBa5EXGC2VZRn_ITjv_3NVRO_XmC--uYDaGDuLkKDW_rBWDj-A0WNV6OzhLn9V2ktjESkcNUSaoQBY-72eIuyu8OcMyKqO6aLuhM9VrKZyRUlKzyduw8ul9BK_EI2xH9fWBcbz9bMI4dOhdeCuqCV4zsGTVqa9t5ffK6HcRt5oDaAlWMyWmE-v_I0jycSyYmaNiTB8qpsr5U45k9GgKoACKBduzwBo5ADiqiOVzd5_P9znUDOglE8fNLZeH9qfdo17B-Lfr_OPKJbeElE7zgNX580E6kjkN6lgv0wAbGJoHtIRrOq5CeblAqn9W6dI"
+
+  tasks:
+    - name: Debug - Preview gathered info from system
+      ansible.builtin.debug:
+        msg: >
+          Inventory report:
+          Hostname: {{ ansible_facts['hostname'] }}
+          OS: {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}
+          RAM: {{ ansible_facts['memtotal_mb'] | default(ansible_facts['memory_mb']['real']['total'] | default('N/A')) }} MB
+          CPU: {{ ansible_facts['architecture'] }}
+          Cores: {{ ansible_facts['processor_vcpus'] | default('N/A') }}
+
+    - name: Push discovered asset to ITAM Snipe-IT
+      ansible.builtin.uri:
+        url: "{{ snipeit_url }}"
+        method: POST
+        status_code: 201
+        headers:
+          Authorization: "Bearer {{ snipeit_token }}"
+          Accept: "application/json"
+          Content-Type: "application/json; charset=utf-8"
+        body_format: json
+        body:
+          asset_tag: "ASSET-{{ ansible_facts['hostname'] | upper }}"
+          status_id: 1 
+          model_id: 1  
+          name: "{{ ansible_facts['hostname'] }}"
+          notes: "Asset discovered automatically by Ansible. OS: {{ ansible_facts['distribution'] }}, RAM: {{ ansible_facts['memtotal_mb'] | default('N/A') }}MB"
+        validate_certs: false
+      register: api_result
+      when: not ansible_check_mode
+
+    - name: Alert sync status
+      ansible.builtin.debug:
+        msg: "Asset {{ ansible_facts['hostname'] }} sync successfully!"
+      when: not ansible_check_mode
